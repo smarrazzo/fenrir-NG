@@ -2,7 +2,7 @@
 
 import socket
 import select
-from scapy.all import *
+from scapy.all import Ether, IP, ARP
 
 
 class Autoconf :

@@ -2,16 +2,15 @@
 
 from sys import exit
 import os
-from pytun import *
-from scapy.all import *
-from MANGLE import *
-from FenrirFangs import *
-from Autoconf import *
+from pytun import TunTapDevice, IFF_TAP, IFF_NO_PI
+from scapy.all import Ether, IP, ARP, ICMP, TCP, UDP, EAPOL, BOOTP, LLMNRQuery, fragment
+from MANGLE import MANGLE
+from FenrirFangs import FenrirFangs
+from Autoconf import Autoconf
 import socket
 import select
 import time
-from struct import *
-from binascii import hexlify,unhexlify
+from binascii import hexlify, unhexlify
 
 class FENRIR:
 
@@ -163,7 +162,7 @@ class FENRIR:
 		##### fin LLMNR / NBNS
 						elif not mycount and 'IP' in epkt and epkt[IP].dport == 445 :
 							print("IN MY FUCKIN IF-2")
-							MANGLE.pktRewriter(epkt, epkt[IP].src, MANGLE.rogue, epkt[Ether].src, MANGLE.mrogue)
+							self.MANGLE.pktRewriter(epkt, epkt[IP].src, self.MANGLE.rogue, epkt[Ether].src, self.MANGLE.mrogue)
 							last_mangled_request.append(str(epkt))
 							self.tap.write(bytes(epkt))
 						else :

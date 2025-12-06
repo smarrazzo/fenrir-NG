@@ -2,7 +2,7 @@
 
 from cmd2 import Cmd
 from binascii import hexlify, unhexlify
-from FENRIR2 import *
+from FENRIR2 import FENRIR
 import threading
 
 class Interface(Cmd):

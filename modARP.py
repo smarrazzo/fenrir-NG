@@ -7,7 +7,7 @@
 ##|# -          to both the legitimate and rogue host          - #|###
 ######################################################################
 
-from scapy.all import *
+from scapy.all import Ether, ARP, ls
 from FenrirTail import FenrirTail
 
 

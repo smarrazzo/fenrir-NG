@@ -5,7 +5,7 @@
 ##|# -                 messages to the user                  - #|###
 ######################################################################
 
-from scapy.all import *
+from scapy.all import Ether, IP, ls
 from sys import stdout
 
 

@@ -9,7 +9,7 @@
 ##|# -          Translation) function ("else" part)          - #|###
 ####################################################################
 
-from scapy.all import *
+from scapy.all import Ether, IP, ARP, ICMP, TCP, UDP, EAPOL, ls
 from modARP import modARP
 from modICMP import modICMP
 from FenrirTail import FenrirTail

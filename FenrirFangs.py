@@ -1,6 +1,5 @@
 # coding=utf-8
 
-from scapy.all import *
 from FenrirTail import FenrirTail
 
 class FenrirFangs:
