@@ -14,6 +14,7 @@ from modARP import modARP
 from modICMP import modICMP
 from FenrirTail import FenrirTail
 from logger import get_logger
+from exceptions import FenrirThreadError, FenrirPacketError, FenrirMangleError
 
 
 ##########################################################
@@ -43,38 +44,72 @@ class MANGLE:
 
 	## NAT LOGIC ##
 	def Fenrir_Address_Translation(self, pkt):
-		self.FenrirTail.notify('\033[7m--- ProcessPKT ---\033[27m', 3)
-		self.pktNumber += 1
-		if 'TCP' in pkt or 'UDP' in pkt:
-			self.FenrirTail.notify('IP packet received. Entering IP processing routines...', 3)
-			if self.FILTER.FILTER_routine(pkt):  # Fenrir's Internal Light-Traffic Efficient Ruling
-				current_PKTthread = self.PKTthread_exist(pkt)
-				#current_PKTthread.gatherSeqNum(pkt)
-				IPpkt = self.Fenrir_Mangling(pkt, current_PKTthread)
-				self.FenrirTail.notify('IP packet sent', 3)
-				self.closeConn_sniff(pkt, current_PKTthread)
-				return IPpkt
+		"""
+		Traduit l'adresse d'un paquet selon la logique NAT de FENRIR.
+		
+		Args:
+			pkt: Paquet Scapy à traiter
+			
+		Returns:
+			Paquet modifié ou False si le paquet doit être ignoré
+			
+		Raises:
+			FenrirPacketError: Si le paquet ne peut pas être traité
+		"""
+		try:
+			self.FenrirTail.notify('\033[7m--- ProcessPKT ---\033[27m', 3)
+			self.pktNumber += 1
+			
+			if 'TCP' in pkt or 'UDP' in pkt:
+				self.FenrirTail.notify('IP packet received. Entering IP processing routines...', 3)
+				if self.FILTER.FILTER_routine(pkt):  # Fenrir's Internal Light-Traffic Efficient Ruling
+					try:
+						current_PKTthread = self.PKTthread_exist(pkt)
+						IPpkt = self.Fenrir_Mangling(pkt, current_PKTthread)
+						self.FenrirTail.notify('IP packet sent', 3)
+						self.closeConn_sniff(pkt, current_PKTthread)
+						return IPpkt
+					except Exception as e:
+						error_msg = f"Error during IP packet mangling: {e}"
+						self.logger.error(error_msg, exc_info=True,
+						                  packet_type="TCP" if 'TCP' in pkt else "UDP",
+						                  src_ip=pkt[IP].src if 'IP' in pkt else 'N/A',
+						                  dst_ip=pkt[IP].dst if 'IP' in pkt else 'N/A')
+						raise FenrirMangleError(error_msg, details={'error': str(e)}) from e
+				else:
+					self.FenrirTail.notify('Packet got dropped by FILTER', 2)
+					self.FenrirTail.notify(str(ls(pkt)), 3)
+					return False
+			# Else, we may need some exceptional processing (ARP stuff, etc...)
 			else:
-				self.FenrirTail.notify('Packet got dropped by FILTER', 2)
-				self.FenrirTail.notify(str(ls(pkt)), 3)
-				return False
-		# Else, we may need some exceptional processing (ARP stuff, etc...)
-		else:
-			self.FenrirTail.notify('Non-TCP/UDP packet received. Entering special processing routines...', 3)
-			if 'ARP' in pkt:
-				ARPpkt = self.modARP.Fenrir_Address_Resolution_Protocol(pkt)
-				self.FenrirTail.notify('ARP packet sent', 3)
-				return ARPpkt
-			elif 'ICMP' in pkt:
-				ICMPpkt = self.modICMP.Fenrir_Control_Message_Protocol(pkt)
-				self.FenrirTail.notify('ICMP packet sent', 3)
-				return ICMPpkt
-			elif 'EAPOL' in pkt:
-				self.FenrirTail.notify('EAPOL packet sent', 3)
-				return pkt.__class__(bytes(pkt))
-			self.FenrirTail.notify('No special packet handlers found... Forwarding packets', 3)
-			return pkt
-			#### INSERT HERE LAYER 3 IMPLEMENTATION MODULES CALLS
+				self.FenrirTail.notify('Non-TCP/UDP packet received. Entering special processing routines...', 3)
+				try:
+					if 'ARP' in pkt:
+						ARPpkt = self.modARP.Fenrir_Address_Resolution_Protocol(pkt)
+						self.FenrirTail.notify('ARP packet sent', 3)
+						return ARPpkt
+					elif 'ICMP' in pkt:
+						ICMPpkt = self.modICMP.Fenrir_Control_Message_Protocol(pkt)
+						self.FenrirTail.notify('ICMP packet sent', 3)
+						return ICMPpkt
+					elif 'EAPOL' in pkt:
+						self.FenrirTail.notify('EAPOL packet sent', 3)
+						return pkt.__class__(bytes(pkt))
+					self.FenrirTail.notify('No special packet handlers found... Forwarding packets', 3)
+					return pkt
+				except Exception as e:
+					error_msg = f"Error processing special packet: {e}"
+					self.logger.error(error_msg, exc_info=True,
+					                  packet_layers=[layer for layer in ['ARP', 'ICMP', 'EAPOL'] if layer in pkt])
+					raise FenrirPacketError(error_msg, details={'error': str(e)}) from e
+				#### INSERT HERE LAYER 3 IMPLEMENTATION MODULES CALLS
+		except FenrirMangleError:
+			# Re-raise les erreurs de mangle
+			raise
+		except Exception as e:
+			error_msg = f"Unexpected error in Fenrir_Address_Translation: {e}"
+			self.logger.critical(error_msg, exc_info=True)
+			raise FenrirPacketError(error_msg, details={'error': str(e)}) from e
 
 	## Find PKTthread associated with a packet ##
 	def PKTthread_exist(self, pkt):
@@ -108,14 +143,32 @@ class MANGLE:
 
 	## Deletion of complete PKTthread ##
 	def deletePKTthread(self, PKTthread):
+		"""
+		Supprime un PKTthread de la liste.
+		
+		Args:
+			PKTthread: Instance de PKTthread à supprimer
+			
+		Returns:
+			True si supprimé avec succès, False sinon
+		"""
 		try:
 			self.PKTthreads.remove(PKTthread)
 			self.PKTthread_number -= 1
 			self.FenrirTail.notify('PKTthread deleted', 3)
 			return True
-		except:
-			self.FenrirTail.fenrirPanic('Unexpected exception was raised during deletion of PKTthread : PKTthread does not exist (this can happen...)', 0, 0)
-			return True
+		except ValueError:
+			# PKTthread n'existe pas dans la liste (peut arriver normalement)
+			self.logger.debug("PKTthread not found in list (may have been already deleted)",
+			                  verbosity_level=3,
+			                  thread_count=len(self.PKTthreads))
+			return False
+		except Exception as e:
+			# Erreur inattendue
+			error_msg = f"Unexpected exception during PKTthread deletion: {e}"
+			self.logger.error(error_msg, exc_info=True, thread_count=len(self.PKTthreads))
+			# Ne pas lever d'exception pour maintenir le comportement original
+			return False
 
 	## Mangling manager ##
 	def Fenrir_Mangling(self, pkt, PKTthread):

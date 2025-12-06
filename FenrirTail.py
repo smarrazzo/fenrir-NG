@@ -129,14 +129,18 @@ class FenrirTail :
 		if reason:
 			self.notifyBad('Reason : ' + reason, 1)
 		
-		# Logger avec métadonnées structurées
-		metadata = {
-			'packet_src_ip': pkt[IP].src if 'IP' in pkt else 'N/A',
-			'packet_dst_ip': pkt[IP].dst if 'IP' in pkt else 'N/A',
-			'packet_src_mac': pkt[Ether].src if 'Ether' in pkt else 'N/A',
-			'packet_dst_mac': pkt[Ether].dst if 'Ether' in pkt else 'N/A',
-			'reason': reason
-        }
+		# Extraire les métadonnées du paquet de manière sécurisée
+		try:
+			metadata = {
+				'packet_src_ip': pkt[IP].src if 'IP' in pkt else 'N/A',
+				'packet_dst_ip': pkt[IP].dst if 'IP' in pkt else 'N/A',
+				'packet_src_mac': pkt[Ether].src if 'Ether' in pkt else 'N/A',
+				'packet_dst_mac': pkt[Ether].dst if 'Ether' in pkt else 'N/A',
+				'reason': reason
+			}
+		except Exception as e:
+			metadata = {'reason': reason, 'packet_parse_error': str(e)}
+		
 		self.logger.error("Mangle exception occurred", exc_info=True, **metadata)
 		
 		# Écrire aussi dans le fichier d'erreur (compatibilité)
@@ -144,14 +148,22 @@ class FenrirTail :
 			with open(self.error_log_file, 'a', encoding='utf-8') as logfd:
 				logfd.write(
 					'---DUMP BEGINS--------------------------------------------------------------------------------------\n')
-				logfd.write(
-					f"[*] Packet header SRC : {pkt[IP].src} ({pkt[Ether].src}) DST : {pkt[IP].dst} ({pkt[Ether].dst})\n")
-				logfd.write('Packet dump :\n')
-				logfd.write(str(ls(pkt)) + '\n')
+				try:
+					if 'IP' in pkt and 'Ether' in pkt:
+						logfd.write(
+							f"[*] Packet header SRC : {pkt[IP].src} ({pkt[Ether].src}) DST : {pkt[IP].dst} ({pkt[Ether].dst})\n")
+					else:
+						logfd.write("[*] Packet header information unavailable\n")
+					logfd.write('Packet dump :\n')
+					logfd.write(str(ls(pkt)) + '\n')
+				except Exception as e:
+					logfd.write(f"Error dumping packet: {e}\n")
 				logfd.write(
 					'---DUMP ENDS----------------------------------------------------------------------------------------\n')
-		except Exception as e:
+		except (OSError, IOError) as e:
 			self.logger.error(f"Failed to write to error log file: {e}", exc_info=True)
+		except Exception as e:
+			self.logger.error(f"Unexpected error writing to error log file: {e}", exc_info=True)
 
 
 	## fenrirPanic : unrecoverable exception handling ##
