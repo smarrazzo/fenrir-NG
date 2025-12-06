@@ -124,7 +124,7 @@ class modARP :
 		if hwdst != 0 :
 			self.FenrirTail.notify('\t' + pkt[ARP].hwdst + ' --> ' + hwdst, 3)
 			pkt[ARP].hwdst = hwdst
-		pkt = pkt.__class__(str(pkt))
+		pkt = pkt.__class__(bytes(pkt))
 		self.FenrirTail.notify('ARP packet mangled and rewritten successfully', 3)
 		return pkt
 

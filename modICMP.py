@@ -113,7 +113,7 @@ class modICMP :
 			pkt[Ether].dst = mdst
 		del pkt[ICMP].chksum
 		del pkt[IP].chksum
-		pkt = pkt.__class__(str(pkt))
+		pkt = pkt.__class__(bytes(pkt))
 		self.FenrirTail.notify('ICMP packet mangled and rewritten successfully', 3)
 		return pkt
 
@@ -146,7 +146,7 @@ class ICMPthread :
 
 	## Debugging functions ##
 	def dump(self) :
-		print 'src_mac = \t' + self.src_mac
-		print 'src_ip = \t' + self.src_ip
-		print 'dst_mac = \t' + self.dst_mac
-		print 'dst_ip = \t' + self.dst_ip
+		print('src_mac = \t' + self.src_mac)
+		print('src_ip = \t' + self.src_ip)
+		print('dst_mac = \t' + self.dst_mac)
+		print('dst_ip = \t' + self.dst_ip)

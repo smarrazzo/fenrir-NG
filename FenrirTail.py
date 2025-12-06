@@ -33,7 +33,7 @@ class FenrirTail :
 				msg = '\033[1m' + msg + '\033[0m'
 			else:
 				msg = '[-- ' + msg
-			print msg
+			print(msg)
 
 
 	## notifyGood : green color ##
@@ -85,4 +85,4 @@ class FenrirTail :
 		if exitOnFailure == 1 :
 			exit(msg)
 		else :
-			print msg
+			print(msg)

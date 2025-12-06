@@ -1,6 +1,7 @@
 # coding=utf-8
 
 from sys import exit
+import os
 from pytun import *
 from scapy.all import *
 from MANGLE import *
@@ -91,11 +92,15 @@ class FENRIR:
 		if interface == self.LhostIface:
 			# This is a dirty hotfix for the fragmentation problem; will be fixed later
 			try:
+				if not isinstance(raw, bytes):
+					raw = bytes(raw)
 				self.scksnd1.send(raw)
 			except:
 				pass
 		else :
 			try:
+				if not isinstance(raw, bytes):
+					raw = bytes(raw)
 				self.scksnd2.send(raw)
 			except:
 				pass
@@ -113,9 +118,9 @@ class FENRIR:
 		while(not stop_event.is_set()):
 			try:
 				inputready,outputready,exceptready = select.select(inputs, [], [])
-			except select.error, e:
+			except select.error as e:
 				break
-			except socket.error, e:
+			except socket.error as e:
 				break
 
 			for socketReady in inputready :
@@ -133,7 +138,7 @@ class FENRIR:
 							last_mangled_request.append(str(pkt))
 							#print("PKT in rules")
 							
-							self.tap.write(str(pkt))
+							self.tap.write(bytes(pkt))
 							break
 						elif 'ARP' in pkt and (pkt[Ether].src == self.tap.hwaddr or pkt[ARP].pdst == self.hostip or pkt[ARP].psrc == self.hostip) :		
 							epkt = pkt
@@ -147,29 +152,29 @@ class FENRIR:
 							break
 		##### NBT-NS
 						if not mycount and 'IP' in epkt and (epkt[IP].dst == '10.0.0.255' and epkt[IP].dport == 137) :
-							print "---------- UDP Packet NBT-NS"
+							print("---------- UDP Packet NBT-NS")
 							last_mangled_request.append(str(epkt))
-							tap.write(str(epkt))
+							self.tap.write(bytes(epkt))
 		##### LLMNR
 						elif not mycount and 'IP' in epkt and (epkt[IP].dst == '224.0.0.252' and epkt[IP].dport == 5355) :
-							print "---------- UDP Packet LLMNR"
+							print("---------- UDP Packet LLMNR")
 							last_mangled_request.append(str(epkt))
-							tap.write(str(epkt))
+							self.tap.write(bytes(epkt))
 		##### fin LLMNR / NBNS
 						elif not mycount and 'IP' in epkt and epkt[IP].dport == 445 :
-							print "IN MY FUCKIN IF-2"
+							print("IN MY FUCKIN IF-2")
 							MANGLE.pktRewriter(epkt, epkt[IP].src, MANGLE.rogue, epkt[Ether].src, MANGLE.mrogue)
 							last_mangled_request.append(str(epkt))
-							tap.write(str(epkt))
+							self.tap.write(bytes(epkt))
 						else :
 							mangled_request = self.MANGLE.Fenrir_Address_Translation(epkt)
 							ifaceToBeUsed = self.chooseIface(mangled_request)
 							if ifaceToBeUsed == 'FENRIR' :
-								self.tap.write(str(mangled_request))
+								self.tap.write(bytes(mangled_request))
 							else :
 								#mangled_request.show2()
 								last_mangled_request.append(str(mangled_request))
-								self.sendeth2(str(mangled_request), ifaceToBeUsed)
+								self.sendeth2(bytes(mangled_request), ifaceToBeUsed)
 					else :
 						last_mangled_request.remove(raw_pkt)
 				### FROM FENRIR ###
@@ -189,24 +194,24 @@ class FENRIR:
 							del mangled_request[IP].chksum
 							if 'UDP' in mangled_request:
 								del mangled_request[UDP].chksum
-							mangled_request = mangled_request.__class__(str(mangled_request))
+							mangled_request = mangled_request.__class__(bytes(mangled_request))
 							#ls(mangled_request)
 		########### fin LLMNR
 						#print(ifaceToBeUsed)
 						if ifaceToBeUsed == 'FENRIR':
-							self.tap.write(str(mangled_request))
+							self.tap.write(bytes(mangled_request))
 							last_mangled_request.append(mangled_request)
 						else :
 							#mangled_request.show2()
 							###
 							if 'IP' in mangled_request and 1 == 2:
 								print("before frag")
-								frags=fragment(mangled_request, fragsize=500)
+								frags = fragment(mangled_request, fragsize=500)
 								print("after frags")
 								for frag in frags:
-									frag = frag.__class__(str(frag))
+									frag = frag.__class__(bytes(frag))
 									last_mangled_request.append(str(frag))
-									self.sendeth2(str(frag), ifaceToBeUsed)							
+									self.sendeth2(bytes(frag), ifaceToBeUsed)							
 									#send(frag, iface=ifaceToBeUsed)
 							else:
 								if 'IP' in mangled_request:
@@ -220,12 +225,12 @@ class FENRIR:
 								#	#print("[[[")
 								#	print(str(mangled_request[TCP].seq) + " : " + str(mangled_request[IP].len))
 								#	print("]]]")
-								self.sendeth2(str(mangled_request), ifaceToBeUsed)							
+								self.sendeth2(bytes(mangled_request), ifaceToBeUsed)							
 							###
 #							last_mangled_request.append(str(mangled_request))
 #							self.sendeth2(str(mangled_request), ifaceToBeUsed)
 					else:
-						self.tap.write(str(epkt))
+						self.tap.write(bytes(epkt))
 						last_mangled_request.remove(epkt)
 				else :
 					exit('WTH')

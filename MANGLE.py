@@ -22,7 +22,7 @@ class MANGLE:
 	def __init__(self, ip_host, ip_rogue, mac_host, mac_rogue, debugLevel=1):
 		self.banner()
 		print('\n')
-		print '\033[1m\033[32m[*] FENRIR is waking up...\033[0m'
+		print('\033[1m\033[32m[*] FENRIR is waking up...\033[0m')
 		self.FenrirTail = FenrirTail(debugLevel)
 		self.FenrirTail.notify('Loading FenrirTail...', 1)
 		self.debugLevel = debugLevel
@@ -70,7 +70,7 @@ class MANGLE:
 				return ICMPpkt
 			elif 'EAPOL' in pkt:
 				self.FenrirTail.notify('EAPOL packet sent', 3)
-				return pkt.__class__(str(pkt))
+				return pkt.__class__(bytes(pkt))
 			self.FenrirTail.notify('No special packet handlers found... Forwarding packets', 3)
 			return pkt
 			#### INSERT HERE LAYER 3 IMPLEMENTATION MODULES CALLS
@@ -155,7 +155,7 @@ class MANGLE:
 			del pkt[TCP].chksum
 		if 'IP' in pkt:
 			del pkt[IP].len
-		pkt = pkt.__class__(str(pkt))
+		pkt = pkt.__class__(bytes(pkt))
 		self.FenrirTail.notify('IP packet mangled and rewritten successfully', 3)
 		return pkt
 
@@ -201,8 +201,8 @@ class MANGLE:
 	def __iter__(self):
 		return self
 
-	def next(self):
-		if PKTthread_number > 0 and PKTthread_index != PKTthread_number:
+	def __next__(self):
+		if self.PKTthread_number > 0 and self.PKTthread_index != self.PKTthread_number:
 			self.PKTthread_index += 1
 			return self.PKTthreads[self.PKTthread_index]
 		else:
@@ -341,7 +341,7 @@ class PKTthread:
 				if pkt[TCP].flags & 0x10 and not pkt[TCP].flags & 0x08:
 					pkt[TCP].seq = pkt[TCP].seq + 1
 				del pkt[TCP].chksum
-				pkt = pkt.__class__(str(pkt))
+				pkt = pkt.__class__(bytes(pkt))
 			self.seq1 = pkt[TCP].seq
 			self.len1 = len(pkt[TCP].payload)
 		return pkt
@@ -364,7 +364,7 @@ class Fenrir_Internal_Light_Trafic_Efficient_Ruling():
 		self.rules = rulesToLoad
 		self.specialRules = []
 		if len(rulesToLoad) > 0 or len(specialRulesToLoad) > 0:
-			self.FenrirTail.notify('\tRule(s) loaded successfully (' + (len(rulesToLoad) + len(specialRulesToLoad)) + ' rule(s))',
+			self.FenrirTail.notify('\tRule(s) loaded successfully (' + str(len(rulesToLoad) + len(specialRulesToLoad)) + ' rule(s))',
 			            2)
 		else:
 			self.FenrirTail.notify('\tNo rule to load', 2)

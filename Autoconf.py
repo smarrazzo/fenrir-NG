@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import socket
+import select
 from scapy.all import *
 
 
@@ -23,13 +24,13 @@ class Autoconf :
 		self.inputs = [self.sockHost, self.sockNetwork]
 
 	def startAutoconf(self):
-		print "Trying to detect @mac and @ip of spoofed host..."
+		print("Trying to detect @mac and @ip of spoofed host...")
 		while self.conf == True :
 			try:
 				inputready,outputready,exceptready = select.select(self.inputs, [], [])
-			except select.error, e:
+			except select.error as e:
 				break
-			except socket.error, e:
+			except socket.error as e:
 				break
 			for socketReady in inputready :
 					#We check packets from iface1 and fwd them to iface2
