@@ -7,6 +7,7 @@ from scapy.all import Ether, IP, ARP, ICMP, TCP, UDP, EAPOL, BOOTP, LLMNRQuery, 
 from MANGLE import MANGLE
 from FenrirFangs import FenrirFangs
 from Autoconf import Autoconf
+from logger import get_logger
 import socket
 import select
 import time
@@ -34,6 +35,7 @@ class FENRIR:
 		self.pktsCount = 0
 		self.LhostIface = 'em1'
 		self.switchIface = 'eth0'
+		self.logger = get_logger('FENRIR.Core', self.verbosity)
 
 	def createTap(self):
 		self.tap = TunTapDevice(flags=IFF_TAP|IFF_NO_PI, name='FENRIR')
@@ -151,17 +153,20 @@ class FENRIR:
 							break
 		##### NBT-NS
 						if not mycount and 'IP' in epkt and (epkt[IP].dst == '10.0.0.255' and epkt[IP].dport == 137) :
-							print("---------- UDP Packet NBT-NS")
+							self.logger.debug("UDP Packet NBT-NS", verbosity_level=2, 
+							                   packet_type="NBT-NS", dst_ip=epkt[IP].dst, dport=epkt[IP].dport)
 							last_mangled_request.append(str(epkt))
 							self.tap.write(bytes(epkt))
 		##### LLMNR
 						elif not mycount and 'IP' in epkt and (epkt[IP].dst == '224.0.0.252' and epkt[IP].dport == 5355) :
-							print("---------- UDP Packet LLMNR")
+							self.logger.debug("UDP Packet LLMNR", verbosity_level=2,
+							                   packet_type="LLMNR", dst_ip=epkt[IP].dst, dport=epkt[IP].dport)
 							last_mangled_request.append(str(epkt))
 							self.tap.write(bytes(epkt))
 		##### fin LLMNR / NBNS
 						elif not mycount and 'IP' in epkt and epkt[IP].dport == 445 :
-							print("IN MY FUCKIN IF-2")
+							self.logger.debug("Processing SMB packet", verbosity_level=2,
+							                   packet_type="SMB", dport=epkt[IP].dport)
 							self.MANGLE.pktRewriter(epkt, epkt[IP].src, self.MANGLE.rogue, epkt[Ether].src, self.MANGLE.mrogue)
 							last_mangled_request.append(str(epkt))
 							self.tap.write(bytes(epkt))
@@ -186,9 +191,8 @@ class FENRIR:
 						ifaceToBeUsed = self.chooseIface(mangled_request)
 
 		########### debut LLMNR
-						#print str(mangled_request.summary()) + " ----------- IN tap socket loop (after MANGLE)" 
 						if 'LLMNRQuery' in mangled_request : 
-							print("IN")
+							self.logger.trace("Processing LLMNR query", packet_type="LLMNRQuery")
 							mangled_request[LLMNRQuery].an.rdata = '10.0.0.5'
 							del mangled_request[IP].chksum
 							if 'UDP' in mangled_request:
@@ -204,9 +208,9 @@ class FENRIR:
 							#mangled_request.show2()
 							###
 							if 'IP' in mangled_request and 1 == 2:
-								print("before frag")
+								self.logger.debug("Fragmenting packet", verbosity_level=3, fragsize=500)
 								frags = fragment(mangled_request, fragsize=500)
-								print("after frags")
+								self.logger.debug(f"Packet fragmented into {len(frags)} fragments", verbosity_level=3)
 								for frag in frags:
 									frag = frag.__class__(bytes(frag))
 									last_mangled_request.append(str(frag))

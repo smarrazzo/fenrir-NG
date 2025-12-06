@@ -13,6 +13,7 @@ from scapy.all import Ether, IP, ARP, ICMP, TCP, UDP, EAPOL, ls
 from modARP import modARP
 from modICMP import modICMP
 from FenrirTail import FenrirTail
+from logger import get_logger
 
 
 ##########################################################
@@ -21,8 +22,8 @@ from FenrirTail import FenrirTail
 class MANGLE:
 	def __init__(self, ip_host, ip_rogue, mac_host, mac_rogue, debugLevel=1):
 		self.banner()
-		print('\n')
-		print('\033[1m\033[32m[*] FENRIR is waking up...\033[0m')
+		self.logger = get_logger('FENRIR.MANGLE', debugLevel)
+		self.logger.success('FENRIR is waking up...', verbosity_level=1)
 		self.FenrirTail = FenrirTail(debugLevel)
 		self.FenrirTail.notify('Loading FenrirTail...', 1)
 		self.debugLevel = debugLevel
@@ -215,9 +216,11 @@ class MANGLE:
 		PUSH = 0x08
 		#currentPKTthread.len1 = pkt[IP].len
 		if pkt[TCP].flags & PUSH:
-			print("dedans")
+			self.logger.trace("Modifying TCP sequence number", 
+			                  old_seq=currentPKTthread.oldseq1,
+			                  old_len=currentPKTthread.oldlen1)
 			pkt[TCP].seq = currentPKTthread.oldseq1 + currentPKTthread.oldlen1 + 1
-			print("PKT TCP SEQ = " + str(currentPKTthread.oldseq1) + " + " + str(currentPKTthread.oldlen1) + " + 1 = " + str(pkt[TCP].seq))
+			self.logger.trace(f"New TCP SEQ = {pkt[TCP].seq} (old_seq={currentPKTthread.oldseq1} + old_len={currentPKTthread.oldlen1} + 1)")
 		return pkt
 
 
@@ -320,7 +323,7 @@ class PKTthread:
 			self.seq1 = pkt[TCP].seq
 			self.oldlen1 = self.len1
 			self.len1 = pkt[IP].len - 52
-			print("self.len1 = " + str(pkt[IP].len) + " - 52 = " + str(self.len1))
+			# Logging déplacé au niveau trace pour éviter le spam
 		else:
 			exit("FENRIR PANIC : non TCP packet was sent to gatherTCPSessID. This should not happen") 
 

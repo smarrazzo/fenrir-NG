@@ -3,6 +3,7 @@
 import socket
 import select
 from scapy.all import Ether, IP, ARP
+from logger import get_logger
 
 
 class Autoconf :
@@ -13,18 +14,19 @@ class Autoconf :
 		self.conf = True
 		self.ifaceHost = "em1"
 		self.ifaceNetwork = "eth0"
+		self.logger = get_logger('FENRIR.Autoconf', verbosity=1)
 		self.sockHost = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
 		self.sockNetwork = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
 		try:
 			self.sockHost.bind((self.ifaceHost, 0))
 			self.sockNetwork.bind((self.ifaceNetwork, 0))
-		except:
-			#exit("You need 2 physical network interfaces to use FENRIR !")
-			print("You need 2 physical network interfaces to use FENRIR !")
+		except (OSError, socket.error) as e:
+			self.logger.warning("You need 2 physical network interfaces to use FENRIR !", 
+			                    exc_info=True, iface_host=self.ifaceHost, iface_network=self.ifaceNetwork)
 		self.inputs = [self.sockHost, self.sockNetwork]
 
 	def startAutoconf(self):
-		print("Trying to detect @mac and @ip of spoofed host...")
+		self.logger.info("Trying to detect @mac and @ip of spoofed host...", verbosity_level=1)
 		while self.conf == True :
 			try:
 				inputready,outputready,exceptready = select.select(self.inputs, [], [])

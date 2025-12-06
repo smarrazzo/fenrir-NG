@@ -7,6 +7,8 @@
 
 from scapy.all import Ether, IP, ls
 from sys import stdout
+from logger import get_logger
+from pathlib import Path
 
 
 ###########################################################################
@@ -14,75 +16,160 @@ from sys import stdout
 ###########################################################################
 class FenrirTail :
 
-	def __init__(self, debugLevel=1) :
+	def __init__(self, debugLevel=1, log_dir=None) :
+		"""
+		Initialise FenrirTail avec le système de logging structuré.
+		
+		Args:
+			debugLevel: Niveau de verbosité (0-3)
+			log_dir: Répertoire pour les fichiers de log (optionnel)
+		"""
 		self.debug = debugLevel
 		self.threshold = 100
+		
+		# Initialiser le logger structuré
+		log_file = None
+		if log_dir:
+			log_dir_path = Path(log_dir)
+			log_dir_path.mkdir(parents=True, exist_ok=True)
+			log_file = str(log_dir_path / 'fenrir.log')
+		
+		self.logger = get_logger('FENRIR', debugLevel, log_file)
+		
+		# Fichier d'erreur pour les exceptions de mangle
+		self.error_log_file = Path('FENRIR.err')
 
 
 	def packetCounter(self, pkt, pktNumber, PKTthread_number):
-		stdout.write("\r\033[1m\033[32m[RAWR]\033[0m Processing packet number\033[1m \033[31m" + str(
-			pktNumber))
-		stdout.flush()
+		"""Affiche un compteur de paquets (compatibilité API)."""
+		self.logger.packet_counter(pktNumber)
 
 
 	# Verbosity : 0 = no msg, 1 = normal, 2 = information (light), 3 = this damn tool won't stop printing stuff
 	## Notify : main function for standard output ##
 	def notify(self, msg, verbosityLevel, bold=0) :
-		if self.debug >= verbosityLevel :
+		"""
+		Notifie un message (compatibilité API).
+		
+		Args:
+			msg: Message à afficher
+			verbosityLevel: Niveau de verbosité requis
+			bold: Si 1, affiche en gras
+		"""
+		if self.debug >= verbosityLevel:
 			if bold == 1:
-				msg = '\033[1m' + msg + '\033[0m'
+				# Message important
+				self.logger.info(f"\033[1m{msg}\033[0m", verbosity_level=verbosityLevel)
 			else:
-				msg = '[-- ' + msg
-			print(msg)
+				# Message normal
+				self.logger.info(f"[-- {msg}", verbosity_level=verbosityLevel)
 
 
 	## notifyGood : green color ##
 	def notifyGood(self, msg, verbosityLevel, bold=0) :
-		if self.debug >= verbosityLevel :
-			msg = '\033[32m[*] ' + msg + '\033[0m'
-			self.notify(msg, verbosityLevel, bold)
+		"""
+		Affiche un message de succès (vert).
+		
+		Args:
+			msg: Message à afficher
+			verbosityLevel: Niveau de verbosité requis
+			bold: Si 1, affiche en gras
+		"""
+		if self.debug >= verbosityLevel:
+			if bold == 1:
+				self.logger.success(f"\033[1m{msg}\033[0m", verbosity_level=verbosityLevel)
+			else:
+				self.logger.success(msg, verbosity_level=verbosityLevel)
 
 
 	## notifyWarn : yellow color ##
 	def notifyWarn(self, msg, verbosityLevel, bold=0) :
-		if self.debug >= verbosityLevel :
-			msg = '\033[33m[*] ' + msg + '\033[0m'
-			self.notify(msg, verbosityLevel, bold)
+		"""
+		Affiche un avertissement (jaune).
+		
+		Args:
+			msg: Message à afficher
+			verbosityLevel: Niveau de verbosité requis
+			bold: Si 1, affiche en gras
+		"""
+		if self.debug >= verbosityLevel:
+			if bold == 1:
+				self.logger.warning(f"\033[1m{msg}\033[0m", verbosity_level=verbosityLevel)
+			else:
+				self.logger.warning(msg, verbosity_level=verbosityLevel)
 
 
 	## notifyBad : red color ##
 	def notifyBad(self, msg, verbosityLevel, bold=0) :
-		if self.debug >= verbosityLevel :
-			msg = '\033[31m[*] ' + msg + '\033[0m'
-			self.notify(msg, verbosityLevel, bold)
+		"""
+		Affiche un message d'erreur (rouge).
+		
+		Args:
+			msg: Message à afficher
+			verbosityLevel: Niveau de verbosité requis
+			bold: Si 1, affiche en gras
+		"""
+		if self.debug >= verbosityLevel:
+			if bold == 1:
+				self.logger.error(f"\033[1m{msg}\033[0m")
+			else:
+				self.logger.error(msg)
 
 
 	## mangleException : responsible for writing mangle exceptions logs to file ## 
 	def mangleException(self, pkt, reason=''):
+		"""
+		Log une exception de mangle avec détails du paquet.
+		
+		Args:
+			pkt: Paquet Scapy qui a causé l'erreur
+			reason: Raison de l'erreur (optionnel)
+		"""
 		self.notifyBad('\nFENRIR PANIC : Process failed during MANGLING', 1, 1)
-		if reason != '':
+		if reason:
 			self.notifyBad('Reason : ' + reason, 1)
-		self.notify('Packet was logged to errorLogFile : FENRIR.err', 1)
-		logfd = open('FENRIR.err', 'a')
-		logfd.write(
-			'---DUMP BEGINS--------------------------------------------------------------------------------------\n')
-		logfd.write(
-			'[*] Packet header SRC : ' + pkt[IP].src + ' (' + pkt[Ether].src + ') DST : ' + pkt[IP].dst + ' (' + pkt[
-				Ether].dst + ')\n')
-		logfd.write('Packet dump :\n')
-		logfd.write(str(ls(pkt)) + '\n')
-		logfd.write(
-			'---DUMP ENDS----------------------------------------------------------------------------------------\n')
-		logfd.close()
+		
+		# Logger avec métadonnées structurées
+		metadata = {
+			'packet_src_ip': pkt[IP].src if 'IP' in pkt else 'N/A',
+			'packet_dst_ip': pkt[IP].dst if 'IP' in pkt else 'N/A',
+			'packet_src_mac': pkt[Ether].src if 'Ether' in pkt else 'N/A',
+			'packet_dst_mac': pkt[Ether].dst if 'Ether' in pkt else 'N/A',
+			'reason': reason
+        }
+		self.logger.error("Mangle exception occurred", exc_info=True, **metadata)
+		
+		# Écrire aussi dans le fichier d'erreur (compatibilité)
+		try:
+			with open(self.error_log_file, 'a', encoding='utf-8') as logfd:
+				logfd.write(
+					'---DUMP BEGINS--------------------------------------------------------------------------------------\n')
+				logfd.write(
+					f"[*] Packet header SRC : {pkt[IP].src} ({pkt[Ether].src}) DST : {pkt[IP].dst} ({pkt[Ether].dst})\n")
+				logfd.write('Packet dump :\n')
+				logfd.write(str(ls(pkt)) + '\n')
+				logfd.write(
+					'---DUMP ENDS----------------------------------------------------------------------------------------\n')
+		except Exception as e:
+			self.logger.error(f"Failed to write to error log file: {e}", exc_info=True)
 
 
 	## fenrirPanic : unrecoverable exception handling ##
 	def fenrirPanic(self, msg, bold=1, exitOnFailure=1) :
-		if bold == 1 :
-			msg = '\033[1m' + 'FENRIR PANIC : ' + msg + '\033[0m'
-		else :
-			msg = 'FENRIR PANIC : ' + msg
-		if exitOnFailure == 1 :
-			exit(msg)
-		else :
-			print(msg)
+		"""
+		Gère une panique FENRIR (erreur critique).
+		
+		Args:
+			msg: Message d'erreur
+			bold: Si 1, affiche en gras
+			exitOnFailure: Si 1, quitte le programme
+		"""
+		formatted_msg = f'FENRIR PANIC : {msg}'
+		if bold == 1:
+			formatted_msg = f'\033[1m{formatted_msg}\033[0m'
+		
+		self.logger.critical(formatted_msg, exc_info=True)
+		
+		if exitOnFailure == 1:
+			from sys import exit
+			exit(formatted_msg)
