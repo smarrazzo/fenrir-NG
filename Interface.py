@@ -82,14 +82,14 @@ class Interface(Cmd):
 			print("*** Invalid number of arguments")
 			self.help_show()
 		else:
-			if args[0] == "tap" and self.FENRIR.tap != None:
+			if args[0] == "tap" and self.FENRIR.tap is not None:
 				print("tap :")
 				print("Address ===> " + self.FENRIR.tap.addr)
 				print("MAC ===> " + self.hexToStr(self.FENRIR.tap.hwaddr))
 				print("mtu ===> " + str(self.FENRIR.tap.mtu))
-			elif args[0] == "host_ip" and self.FENRIR.hostip != None:
+			elif args[0] == "host_ip" and self.FENRIR.hostip is not None:
 				print("host_ip ===> " + self.FENRIR.hostip)
-			elif args[0] == "host_mac" and self.FENRIR.hostmac != None:
+			elif args[0] == "host_mac" and self.FENRIR.hostmac is not None:
 				print("host_mac ===> " + self.hexToStr(self.FENRIR.hostmac))
 			elif args[0] == "rules":
 				if self.FENRIR.FenrirFangs.ruleCount == 0:
@@ -208,9 +208,9 @@ class Interface(Cmd):
 
 
 	def do_run(self,s):
-		if self.FENRIR.tap == None:
+		if self.FENRIR.tap is None:
 			self.do_create_virtual_tap("")
-		if self.FENRIR.tap != None and self.FENRIR.hostip != '' and self.FENRIR.hostmac != '':
+		if self.FENRIR.tap is not None and self.FENRIR.hostip != '' and self.FENRIR.hostmac != '':
 			self.FENRIR.setAttribute("verbosity", 0)
 			self.changeRunningState(True)
 			self.stop_event = threading.Event()
@@ -230,9 +230,9 @@ class Interface(Cmd):
 
 
 	def do_run_debug(self,s):
-		if self.FENRIR.tap == None:
+		if self.FENRIR.tap is None:
 			self.do_create_virtual_tap("")
-		if self.FENRIR.tap != None and self.FENRIR.hostip != '' and self.FENRIR.hostmac != '':
+		if self.FENRIR.tap is not None and self.FENRIR.hostip != '' and self.FENRIR.hostmac != '':
 			self.changeRunningState(True)
 			self.stop_event = threading.Event()
 			self.FENRIR.initMANGLE(self.stop_event)

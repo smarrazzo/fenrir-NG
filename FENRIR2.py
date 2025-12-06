@@ -66,7 +66,7 @@ class FENRIR:
 			raise FenrirTAPError(error_msg, details={'error': str(e), 'error_type': type(e).__name__}) from e
 
 	def downTap(self):
-		if self.tap != None:
+		if self.tap is not None:
 			self.tap.down()
 
 	def bindAllIface(self):
