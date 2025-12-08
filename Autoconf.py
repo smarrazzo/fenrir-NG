@@ -5,12 +5,13 @@ import select
 from scapy.all import Ether, IP, ARP
 from logger import get_logger
 from exceptions import FenrirInterfaceError, FenrirAutoconfError
+from binascii import hexlify, unhexlify
 
 
 class Autoconf :
 
 	def __init__(self):
-		self.hostmac = ""
+		self.hostmac = b""  # bytes pour cohérence
 		self.hostip = ""
 		self.conf = True
 		self.ifaceHost = "em1"
@@ -101,13 +102,17 @@ class Autoconf :
 							continue
 						
 						if 'ARP' in dpkt:
-							self.hostmac = dpkt[Ether].src
-							self.logger.debug("Detected MAC from ARP", verbosity_level=2, mac=self.hostmac)
+							# Scapy retourne les MAC comme strings, convertir en bytes pour stockage
+							mac_str = dpkt[Ether].src
+							self.hostmac = unhexlify(mac_str.replace(':', '').encode('ascii'))
+							self.logger.debug("Detected MAC from ARP", verbosity_level=2, mac=mac_str)
 						elif 'IP' in dpkt:
 							self.hostip = dpkt[IP].src
-							self.hostmac = dpkt[Ether].src
+							# Scapy retourne les MAC comme strings, convertir en bytes pour stockage
+							mac_str = dpkt[Ether].src
+							self.hostmac = unhexlify(mac_str.replace(':', '').encode('ascii'))
 							self.logger.debug("Detected IP and MAC from IP packet", 
-							                 verbosity_level=2, ip=self.hostip, mac=self.hostmac)
+							                 verbosity_level=2, ip=self.hostip, mac=mac_str)
 						
 						# We send the packet to the other interface
 						if self.sockNetwork:
@@ -142,10 +147,17 @@ class Autoconf :
 					                   verbosity_level=2, error=str(e), exc_info=True)
 					continue
 			
-			if self.hostip != "" and self.hostmac != "":
-				self.logger.success(f"Autoconf successful: IP={self.hostip}, MAC={self.hostmac}",
+			# Vérifier que hostmac est bytes et hostip est string
+			if self.hostip and self.hostmac:
+				# Convertir hostmac en string pour le retour (compatibilité)
+				if isinstance(self.hostmac, bytes):
+					hostmac_str = hexlify(self.hostmac).decode('ascii')
+					hostmac_str = hostmac_str[:2] + ":" + hostmac_str[2:4] + ":" + hostmac_str[4:6] + ":" + hostmac_str[6:8] + ":" + hostmac_str[8:10] + ":" + hostmac_str[-2:]
+				else:
+					hostmac_str = self.hostmac
+				self.logger.success(f"Autoconf successful: IP={self.hostip}, MAC={hostmac_str}",
 				                   verbosity_level=1)
-				return self.hostip, self.hostmac
+				return self.hostip, hostmac_str
 		
 		# Si on arrive ici sans avoir détecté IP et MAC
 		if not (self.hostip and self.hostmac):

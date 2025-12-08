@@ -43,13 +43,35 @@ class Interface(Cmd):
 		
 	### TOOLBOX ###
 	def hexToStr(self, hexstr):
+		"""
+		Convertit une adresse MAC en bytes vers une string formatée.
+		
+		Args:
+			hexstr: Adresse MAC en bytes (ou string d'octets)
+			
+		Returns:
+			String formatée "XX:XX:XX:XX:XX:XX"
+		"""
+		# S'assurer que c'est bytes
+		if isinstance(hexstr, str):
+			hexstr = hexstr.encode('latin-1')
+		# hexlify retourne bytes en Python 3, donc decode() est nécessaire
 		string = hexlify(hexstr).decode('ascii')
 		return string[:2] + ":" + string[2:4] + ":" + string[4:6] + ":" + string[6:8] + ":" + string[8:10] + ":" + string[-2:]
 
 	def strToHex(self, string):
+		"""
+		Convertit une adresse MAC en string vers bytes.
+		
+		Args:
+			string: Adresse MAC formatée "XX:XX:XX:XX:XX:XX"
+			
+		Returns:
+			Adresse MAC en bytes
+		"""
 		hexes = string.split(":")
 		hexstr = ''.join(hexes).encode("ascii")
-		return unhexlify(hexstr)
+		return unhexlify(hexstr)  # unhexlify retourne bytes en Python 3
 
 	def changeRunningState(self, state):
 		if state == True:
