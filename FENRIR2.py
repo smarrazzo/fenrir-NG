@@ -19,6 +19,7 @@ import select
 import time
 from binascii import hexlify, unhexlify
 import threading
+from collections import deque
 
 class FENRIR:
 
@@ -209,8 +210,24 @@ class FENRIR:
 			raise FenrirTAPError(error_msg)
 		
 		inputs = [self.s, self.tap]
-		# Utiliser un set de bytes pour éviter les doublons (plus efficace que list)
-		last_mangled_request = set()
+		# Structure limitée pour éviter la croissance mémoire : set + file FIFO
+		max_seen_packets = 512
+		last_mangled_request_set = set()
+		last_mangled_request_fifo = deque()
+
+		def remember_packet(pkt_bytes: bytes) -> None:
+			if pkt_bytes in last_mangled_request_set:
+				return
+			last_mangled_request_set.add(pkt_bytes)
+			last_mangled_request_fifo.append(pkt_bytes)
+			if len(last_mangled_request_fifo) > max_seen_packets:
+				old = last_mangled_request_fifo.popleft()
+				last_mangled_request_set.discard(old)
+
+		def forget_packet(pkt_bytes: bytes) -> None:
+			if pkt_bytes in last_mangled_request_set:
+				last_mangled_request_set.discard(pkt_bytes)
+
 		mycount = 1 ## DECOMISSIONNED
 		
 		try:
@@ -262,7 +279,7 @@ class FENRIR:
 					
 					raw_pkt = packet[0]  # bytes from socket
 					# Utiliser bytes pour la comparaison (plus efficace et cohérent)
-					if raw_pkt not in last_mangled_request: # pour éviter le sniff de paquets déjà traités (to avoid sniffing packets that have already been processed)
+					if raw_pkt not in last_mangled_request_set: # éviter les doublons
 						self.pktsCount += 1
 						try:
 							pkt = Ether(packet[0])
@@ -277,7 +294,7 @@ class FENRIR:
 								self.MANGLE.pktRewriter(pkt, pkt[IP].src, self.MANGLE.rogue, pkt[Ether].src, self.MANGLE.mrogue)
 							# Stocker en bytes pour cohérence avec la comparaison
 							pkt_bytes = bytes(pkt)
-							last_mangled_request.add(pkt_bytes)
+							remember_packet(pkt_bytes)
 							#print("PKT in rules")
 							
 							self.tap.write(pkt_bytes)
@@ -305,7 +322,7 @@ class FENRIR:
 							self.logger.debug("UDP Packet LLMNR", verbosity_level=2,
 							                   packet_type="LLMNR", dst_ip=epkt[IP].dst, dport=epkt[IP].dport)
 							epkt_bytes = bytes(epkt)
-							last_mangled_request.add(epkt_bytes)
+							remember_packet(epkt_bytes)
 							self.tap.write(epkt_bytes)
 		##### fin LLMNR / NBNS
 						elif not mycount and 'IP' in epkt and epkt[IP].dport == 445 :
@@ -313,7 +330,7 @@ class FENRIR:
 							                   packet_type="SMB", dport=epkt[IP].dport)
 							self.MANGLE.pktRewriter(epkt, epkt[IP].src, self.MANGLE.rogue, epkt[Ether].src, self.MANGLE.mrogue)
 							epkt_bytes = bytes(epkt)
-							last_mangled_request.add(epkt_bytes)
+							remember_packet(epkt_bytes)
 							self.tap.write(epkt_bytes)
 						else :
 							mangled_request = self.MANGLE.Fenrir_Address_Translation(epkt)
@@ -324,11 +341,11 @@ class FENRIR:
 									self.tap.write(mangled_bytes)
 								else :
 									#mangled_request.show2()
-									last_mangled_request.add(mangled_bytes)
+									remember_packet(mangled_bytes)
 									self.sendeth2(mangled_bytes, ifaceToBeUsed)
 					else :
 						# Paquet déjà traité, le retirer du set
-						last_mangled_request.discard(raw_pkt)  # discard() ne lève pas d'erreur si absent
+						forget_packet(raw_pkt)  # discard() ne lève pas d'erreur si absent
 				### FROM FENRIR ###
 				elif socketReady == self.tap :
 					self.pktsCount += 1
@@ -351,7 +368,7 @@ class FENRIR:
 						continue
 					# Convertir le buffer en bytes pour la comparaison
 					buf_bytes = buf if isinstance(buf, bytes) else bytes(buf)
-					if buf_bytes not in last_mangled_request:
+					if buf_bytes not in last_mangled_request_set:
 						mangled_request = self.MANGLE.Fenrir_Address_Translation(epkt)
 						if not mangled_request:  # Paquet rejeté
 							continue
@@ -372,7 +389,7 @@ class FENRIR:
 						mangled_bytes = bytes(mangled_request)
 						if ifaceToBeUsed == 'FENRIR':
 							self.tap.write(mangled_bytes)
-							last_mangled_request.add(mangled_bytes)
+							remember_packet(mangled_bytes)
 						else :
 							#mangled_request.show2()
 							###
@@ -383,7 +400,7 @@ class FENRIR:
 								for frag in frags:
 									frag = frag.__class__(bytes(frag))
 									frag_bytes = bytes(frag)
-									last_mangled_request.add(frag_bytes)
+									remember_packet(frag_bytes)
 									self.sendeth2(frag_bytes, ifaceToBeUsed)							
 									#send(frag, iface=ifaceToBeUsed)
 							else:
@@ -393,7 +410,7 @@ class FENRIR:
 								#if 'TCP' in mangled_request:
 								#	new_mangled_request = self.MANGLE.changeSessID(mangled_request)
 								#	mangled_request = new_mangled_request
-								last_mangled_request.add(mangled_bytes)
+								remember_packet(mangled_bytes)
 								#if 'TCP' in mangled_request:
 								#	#print("[[[")
 								#	print(str(mangled_request[TCP].seq) + " : " + str(mangled_request[IP].len))
@@ -406,7 +423,7 @@ class FENRIR:
 						# Paquet déjà traité depuis TAP
 						epkt_bytes = bytes(epkt) if not isinstance(epkt, bytes) else epkt
 						self.tap.write(epkt_bytes)
-						last_mangled_request.discard(buf_bytes)  # Retirer le buffer original
+						forget_packet(buf_bytes)  # Retirer le buffer original
 				else:
 					error_msg = f"Unknown socket ready: {socketReady}"
 					self.logger.error(error_msg, socket_type=type(socketReady).__name__)
