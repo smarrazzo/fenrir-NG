@@ -9,11 +9,13 @@
 ##|# -          Translation) function ("else" part)          - #|###
 ####################################################################
 
+from typing import Optional, Union, List, Any
 from scapy.all import Ether, IP, ARP, ICMP, TCP, UDP, EAPOL, ls
+from scapy.packet import Packet as ScapyPacket
 from modARP import modARP
 from modICMP import modICMP
 from FenrirTail import FenrirTail
-from logger import get_logger
+from logger import get_logger, FenrirLogger
 from exceptions import FenrirThreadError, FenrirPacketError, FenrirMangleError
 
 
@@ -21,29 +23,29 @@ from exceptions import FenrirThreadError, FenrirPacketError, FenrirMangleError
 ### --- Main component implementing the NAT LOGIC --- ####
 ##########################################################
 class MANGLE:
-	def __init__(self, ip_host, ip_rogue, mac_host, mac_rogue, debugLevel=1):
+	def __init__(self, ip_host: str, ip_rogue: str, mac_host: str, mac_rogue: str, debugLevel: int = 1) -> None:
 		self.banner()
-		self.logger = get_logger('FENRIR.MANGLE', debugLevel)
+		self.logger: FenrirLogger = get_logger('FENRIR.MANGLE', debugLevel)
 		self.logger.success('FENRIR is waking up...', verbosity_level=1)
-		self.FenrirTail = FenrirTail(debugLevel)
+		self.FenrirTail: FenrirTail = FenrirTail(debugLevel)
 		self.FenrirTail.notify('Loading FenrirTail...', 1)
-		self.debugLevel = debugLevel
-		self.host = ip_host
-		self.rogue = ip_rogue
-		self.mrogue = mac_rogue
-		self.mhost = mac_host
-		self.PKTthreads = []
-		self.pktNumber = 0
-		self.threshold = self.FenrirTail.threshold
-		self.PKTthread_number = 0
-		self.PKTthread_index = 0
-		self.FILTER = Fenrir_Internal_Light_Trafic_Efficient_Ruling(debugLevel)
-		self.modARP = modARP(ip_host, ip_rogue, mac_host, mac_rogue, debugLevel)
-		self.modICMP = modICMP(ip_host, ip_rogue, mac_host, mac_rogue, debugLevel)
+		self.debugLevel: int = debugLevel
+		self.host: str = ip_host
+		self.rogue: str = ip_rogue
+		self.mrogue: str = mac_rogue
+		self.mhost: str = mac_host
+		self.PKTthreads: List['PKTthread'] = []
+		self.pktNumber: int = 0
+		self.threshold: int = self.FenrirTail.threshold
+		self.PKTthread_number: int = 0
+		self.PKTthread_index: int = 0
+		self.FILTER: 'Fenrir_Internal_Light_Trafic_Efficient_Ruling' = Fenrir_Internal_Light_Trafic_Efficient_Ruling(debugLevel)
+		self.modARP: modARP = modARP(ip_host, ip_rogue, mac_host, mac_rogue, debugLevel)
+		self.modICMP: modICMP = modICMP(ip_host, ip_rogue, mac_host, mac_rogue, debugLevel)
 		self.FenrirTail.notifyGood('FENRIR init complete ! Ready to process trafic...\n', 1, 1)
 
 	## NAT LOGIC ##
-	def Fenrir_Address_Translation(self, pkt):
+	def Fenrir_Address_Translation(self, pkt: ScapyPacket) -> Union[ScapyPacket, bool]:
 		"""
 		Traduit l'adresse d'un paquet selon la logique NAT de FENRIR.
 		
@@ -112,7 +114,7 @@ class MANGLE:
 			raise FenrirPacketError(error_msg, details={'error': str(e)}) from e
 
 	## Find PKTthread associated with a packet ##
-	def PKTthread_exist(self, pkt):
+	def PKTthread_exist(self, pkt: ScapyPacket) -> 'PKTthread':
 		for PKTthread in self.PKTthreads:
 			if PKTthread.thisIsMyPKT(pkt) == True:
 				self.FenrirTail.notify('PKTthread exists...', 2)
@@ -121,20 +123,20 @@ class MANGLE:
 		return self.create_PKTthread(pkt)
 
 	## Create a new PKTthread upon receiving new packet ##
-	def create_PKTthread(self, pkt):
+	def create_PKTthread(self, pkt: ScapyPacket) -> 'PKTthread':
 		if pkt[IP].dst == self.host or pkt[IP].dst == self.rogue:
 			return self.create_PKTthread_from_reverseCon(pkt)
 		else:
 			return self.create_PKTthread_from_bindCon(pkt)
 
-	def create_PKTthread_from_reverseCon(self, pkt):
+	def create_PKTthread_from_reverseCon(self, pkt: ScapyPacket) -> 'PKTthread':
 		PKTthreadInstance = PKTthread(pkt.dport, pkt.sport, pkt[IP].dst, pkt[IP].src, [-1,-1], 'active')
 		self.PKTthreads.append(PKTthreadInstance)
 		self.PKTthread_number += 1
 		self.FenrirTail.notify('PKTthread created from reverse connection', 3)
 		return PKTthreadInstance
 
-	def create_PKTthread_from_bindCon(self, pkt):
+	def create_PKTthread_from_bindCon(self, pkt: ScapyPacket) -> 'PKTthread':
 		PKTthreadInstance = PKTthread(pkt.sport, pkt.dport, pkt[IP].src, pkt[IP].dst, [-1,-1], 'active')
 		self.PKTthreads.append(PKTthreadInstance)
 		self.PKTthread_number += 1
@@ -142,7 +144,7 @@ class MANGLE:
 		return PKTthreadInstance
 
 	## Deletion of complete PKTthread ##
-	def deletePKTthread(self, PKTthread):
+	def deletePKTthread(self, PKTthread: 'PKTthread') -> bool:
 		"""
 		Supprime un PKTthread de la liste.
 		
@@ -171,7 +173,7 @@ class MANGLE:
 			return False
 
 	## Mangling manager ##
-	def Fenrir_Mangling(self, pkt, PKTthread):
+	def Fenrir_Mangling(self, pkt: ScapyPacket, PKTthread: 'PKTthread') -> ScapyPacket:
 		if pkt[IP].src == self.host:  # Packet for network on a host-network Pthread, no need for mangling
 			self.FenrirTail.notify('Packet from host to network - FORWARD', 2)
 			return pkt
@@ -190,7 +192,7 @@ class MANGLE:
 			return pkt
 
 	## Rewrite packet IPs and MACs ##
-	def pktRewriter(self, pkt, src, dst, msrc, mdst):
+	def pktRewriter(self, pkt: ScapyPacket, src: str, dst: str, msrc: str, mdst: str) -> ScapyPacket:
 		self.FenrirTail.notify('IP packet is being rewritten :', 3)
 		if pkt[IP].src != src:
 			self.FenrirTail.notify('\t' + pkt[IP].src + ' --> ' + src, 3)
@@ -214,7 +216,7 @@ class MANGLE:
 		return pkt
 
 	## Checks for connection termination from host/rogue/remote which implies PKTthread deletion ##
-	def closeConn_sniff(self, pkt, PKTthread):
+	def closeConn_sniff(self, pkt: ScapyPacket, PKTthread: 'PKTthread') -> bool:
 		# definitions for binary AND
 		FIN = 0x01
 		SYN = 0x02
@@ -252,10 +254,10 @@ class MANGLE:
 				self.deletePKTthread(PKTthread)
 
 	## Iterator Methods ##
-	def __iter__(self):
+	def __iter__(self) -> 'MANGLE':
 		return self
 
-	def __next__(self):
+	def __next__(self) -> 'PKTthread':
 		if self.PKTthread_number > 0 and self.PKTthread_index != self.PKTthread_number:
 			self.PKTthread_index += 1
 			return self.PKTthreads[self.PKTthread_index]
@@ -264,7 +266,7 @@ class MANGLE:
 
 	
 	## TCP Sequence number modification ##
-	def changeSessID(self, pkt):
+	def changeSessID(self, pkt: ScapyPacket) -> ScapyPacket:
 		currentPKTthread = self.PKTthread_exist(pkt)
 		PUSH = 0x08
 		#currentPKTthread.len1 = pkt[IP].len
@@ -277,7 +279,7 @@ class MANGLE:
 		return pkt
 
 
-	def banner(self) :
+	def banner(self) -> None:
 		print("\n\033[1m")
 		print("                                                      ,a8b")
 		print("                                                  ,,od8  8")
@@ -309,27 +311,27 @@ class MANGLE:
 ### --- Class representing an IP connection between 2 hosts --- ####
 ####################################################################
 class PKTthread:
-	states = ['active', 'reset', 'FIN_sent', 'FIN_acknowledged', 'zombie', 'collided']
+	states: List[str] = ['active', 'reset', 'FIN_sent', 'FIN_acknowledged', 'zombie', 'collided']
 
 	# SOURCE is always from the host point of view (spoofed/rogue host)
-	def __init__(self, psrc, pdst, asrc, adst, seqList, activity="active"):
-		self.src_port = psrc
-		self.src_ip = asrc
-		self.dst_port = pdst
-		self.dst_ip = adst
-		self.state = activity
-		self.sequence = seqList # sequence numbers storage
-		self.oldseq1 = 0
-		self.seq1 = 0
-		self.oldlen1 = 0
-		self.len1 = 0
-		self.oldseq2 = 0
-		self.seq2 = 0
-		self.oldlen2 = 0
-		self.len2 = 0
+	def __init__(self, psrc: int, pdst: int, asrc: str, adst: str, seqList: List[int], activity: str = "active") -> None:
+		self.src_port: int = psrc
+		self.src_ip: str = asrc
+		self.dst_port: int = pdst
+		self.dst_ip: str = adst
+		self.state: str = activity
+		self.sequence: List[int] = seqList # sequence numbers storage
+		self.oldseq1: int = 0
+		self.seq1: int = 0
+		self.oldlen1: int = 0
+		self.len1: int = 0
+		self.oldseq2: int = 0
+		self.seq2: int = 0
+		self.oldlen2: int = 0
+		self.len2: int = 0
 
 	## Returns True if a packet is part of the PKT ##
-	def thisIsMyPKT(self, pkt):
+	def thisIsMyPKT(self, pkt: ScapyPacket) -> bool:
 		# host->server check first
 		if pkt[IP].dst == self.dst_ip and pkt.sport == self.src_port and pkt.dport == self.dst_port:
 			#self.sequence[0] = pkt[IP].seq
@@ -346,7 +348,7 @@ class PKTthread:
 			return False
 
 	## Gathering of Seq numbers ##
-	def gatherSeqNum(self, pkt):
+	def gatherSeqNum(self, pkt: ScapyPacket) -> None:
 		if pkt[IP].dst == self.dst_ip and pkt.sport == self.src_port and pkt.dport == self.dst_port:
 			if 'TCP' in pkt:
 				self.gatherTCPSessID1(pkt)
@@ -356,7 +358,7 @@ class PKTthread:
 
 
 	## Wrapper around the state change ##
-	def changeState(self, newState):
+	def changeState(self, newState: str) -> None:
 		if self.state != 'zombie':
 			self.state = newState
 		else:
@@ -364,13 +366,13 @@ class PKTthread:
 				"PKTThread in unstable state : '" + self.state + "' - Look for the 'changeState' function in MANGLE.py")
 
 	## Dump function used in logging ##
-	def threadDump(self):
+	def threadDump(self) -> str:
 		dump = self.src_ip + " ---> " + self.dst_ip + "\n"
 		dump = dump + "port " + self.src_port + " to " + self.dst_port
 		return dump
 	
 	## Gathering of TCP session for PKTthread updating ##
-	def gatherTCPSessID1(self, pkt) :
+	def gatherTCPSessID1(self, pkt: ScapyPacket) -> None:
 		if 'TCP' in pkt:
 			self.oldseq1 = self.seq1
 			self.seq1 = pkt[TCP].seq
@@ -380,14 +382,14 @@ class PKTthread:
 		else:
 			exit("FENRIR PANIC : non TCP packet was sent to gatherTCPSessID. This should not happen") 
 
-	def gatherTCPSessID2(self, pkt) :
+	def gatherTCPSessID2(self, pkt: ScapyPacket) -> None:
 		self.oldseq2 = self.seq2
 		self.seq2 = pkt[TCP].seq
 		self.oldlen2 = self.len2
 		self.len2 = pkt[IP].len - 52
 		#print("IN 2")
 
-	def mangleSeqNum1(self, pkt):
+	def mangleSeqNum1(self, pkt: ScapyPacket) -> ScapyPacket:
 		if 'TCP' in pkt :
 			self.oldseq1 = self.seq1
 			self.oldlen1 = self.len1
@@ -410,15 +412,19 @@ class PKTthread:
 
 ### THIS CLASS IS DECOMMISSIONNED !!! ###
 class Fenrir_Internal_Light_Trafic_Efficient_Ruling():
-	actions = ['drop', 'log']
+	actions: List[str] = ['drop', 'log']
 
-	def __init__(self, debugHerited, rulesToLoad=[], specialRulesToLoad=[], filename='FENRIR.log'):
-		self.FenrirTail = FenrirTail(debugHerited)
-		self.enabled = False
+	def __init__(self, debugHerited: int, rulesToLoad: List[Any] = None, specialRulesToLoad: List[Any] = None, filename: str = 'FENRIR.log') -> None:
+		if rulesToLoad is None:
+			rulesToLoad = []
+		if specialRulesToLoad is None:
+			specialRulesToLoad = []
+		self.FenrirTail: FenrirTail = FenrirTail(debugHerited)
+		self.enabled: bool = False
 		self.FenrirTail.notify('Loading FILTER module...', 1)
-		self.logfile = filename
-		self.rules = rulesToLoad
-		self.specialRules = []
+		self.logfile: str = filename
+		self.rules: List[Any] = rulesToLoad
+		self.specialRules: List[Any] = []
 		if len(rulesToLoad) > 0 or len(specialRulesToLoad) > 0:
 			self.FenrirTail.notify('\tRule(s) loaded successfully (' + str(len(rulesToLoad) + len(specialRulesToLoad)) + ' rule(s))',
 			            2)
@@ -427,7 +433,7 @@ class Fenrir_Internal_Light_Trafic_Efficient_Ruling():
 			self.enabled = False
 
 	## Main FILTER's routine : returns False if packet is dropped (The method also takes other ations in charge e.g. logging) ##
-	def FILTER_routine(self, pkt):
+	def FILTER_routine(self, pkt: ScapyPacket) -> bool:
 		if self.enabled == False:
 			return True
 		else:
@@ -441,7 +447,7 @@ class Fenrir_Internal_Light_Trafic_Efficient_Ruling():
 			return True
 
 	## Apply rule to packet and execute function associated to action; returns True if action is drop ##
-	def applyRule(self, rule, pkt):
+	def applyRule(self, rule: Any, pkt: ScapyPacket) -> bool:
 		if pkt[IP].src == rule[0] or pkt[IP].dst == rule[0]:
 			if pkt.sport == rule[1] or pkt.dport == rule[1]:
 				action = rule[3]
@@ -449,7 +455,7 @@ class Fenrir_Internal_Light_Trafic_Efficient_Ruling():
 				return action()
 
 	## Add rule for host(s) ##
-	def ruleAdd(self, host, port, action='drop'):
+	def ruleAdd(self, host: str, port: int, action: str = 'drop') -> None:
 		if host == '*':
 			newRule = [port, action]
 			self.specialRules.append(newRule)
@@ -459,10 +465,10 @@ class Fenrir_Internal_Light_Trafic_Efficient_Ruling():
 		self.FenrirTail.notify('Rule added', 3)
 
 	#### ACTION SET ####
-	def drop(self, pkt):
+	def drop(self, pkt: ScapyPacket) -> bool:
 		return True
 
-	def log(self, pkt):
+	def log(self, pkt: ScapyPacket) -> bool:
 		logfd = open(self.logfile, 'a')
 		logfd.write(
 			'[*] Packet received FROM ' + pkt[IP].src + ' (' + pkt[Ether].src + ') GOING TO ' + pkt[IP].dst + ' (' +

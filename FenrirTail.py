@@ -5,9 +5,11 @@
 ##|# -                 messages to the user                  - #|###
 ######################################################################
 
+from typing import Optional
 from scapy.all import Ether, IP, ls
+from scapy.packet import Packet as ScapyPacket
 from sys import stdout
-from logger import get_logger
+from logger import get_logger, FenrirLogger
 from pathlib import Path
 
 
@@ -16,7 +18,7 @@ from pathlib import Path
 ###########################################################################
 class FenrirTail :
 
-	def __init__(self, debugLevel=1, log_dir=None) :
+	def __init__(self, debugLevel: int = 1, log_dir: Optional[str] = None) -> None:
 		"""
 		Initialise FenrirTail avec le système de logging structuré.
 		
@@ -24,30 +26,30 @@ class FenrirTail :
 			debugLevel: Niveau de verbosité (0-3)
 			log_dir: Répertoire pour les fichiers de log (optionnel)
 		"""
-		self.debug = debugLevel
-		self.threshold = 100
+		self.debug: int = debugLevel
+		self.threshold: int = 100
 		
 		# Initialiser le logger structuré
-		log_file = None
+		log_file: Optional[str] = None
 		if log_dir:
 			log_dir_path = Path(log_dir)
 			log_dir_path.mkdir(parents=True, exist_ok=True)
 			log_file = str(log_dir_path / 'fenrir.log')
 		
-		self.logger = get_logger('FENRIR', debugLevel, log_file)
+		self.logger: FenrirLogger = get_logger('FENRIR', debugLevel, log_file)
 		
 		# Fichier d'erreur pour les exceptions de mangle
-		self.error_log_file = Path('FENRIR.err')
+		self.error_log_file: Path = Path('FENRIR.err')
 
 
-	def packetCounter(self, pkt, pktNumber, PKTthread_number):
+	def packetCounter(self, pkt: ScapyPacket, pktNumber: int, PKTthread_number: int) -> None:
 		"""Affiche un compteur de paquets (compatibilité API)."""
 		self.logger.packet_counter(pktNumber)
 
 
 	# Verbosity : 0 = no msg, 1 = normal, 2 = information (light), 3 = this damn tool won't stop printing stuff
 	## Notify : main function for standard output ##
-	def notify(self, msg, verbosityLevel, bold=0) :
+	def notify(self, msg: str, verbosityLevel: int, bold: int = 0) -> None:
 		"""
 		Notifie un message (compatibilité API).
 		
@@ -66,7 +68,7 @@ class FenrirTail :
 
 
 	## notifyGood : green color ##
-	def notifyGood(self, msg, verbosityLevel, bold=0) :
+	def notifyGood(self, msg: str, verbosityLevel: int, bold: int = 0) -> None:
 		"""
 		Affiche un message de succès (vert).
 		
@@ -83,7 +85,7 @@ class FenrirTail :
 
 
 	## notifyWarn : yellow color ##
-	def notifyWarn(self, msg, verbosityLevel, bold=0) :
+	def notifyWarn(self, msg: str, verbosityLevel: int, bold: int = 0) -> None:
 		"""
 		Affiche un avertissement (jaune).
 		
@@ -100,7 +102,7 @@ class FenrirTail :
 
 
 	## notifyBad : red color ##
-	def notifyBad(self, msg, verbosityLevel, bold=0) :
+	def notifyBad(self, msg: str, verbosityLevel: int, bold: int = 0) -> None:
 		"""
 		Affiche un message d'erreur (rouge).
 		
@@ -117,7 +119,7 @@ class FenrirTail :
 
 
 	## mangleException : responsible for writing mangle exceptions logs to file ## 
-	def mangleException(self, pkt, reason=''):
+	def mangleException(self, pkt: ScapyPacket, reason: str = '') -> None:
 		"""
 		Log une exception de mangle avec détails du paquet.
 		
@@ -167,7 +169,7 @@ class FenrirTail :
 
 
 	## fenrirPanic : unrecoverable exception handling ##
-	def fenrirPanic(self, msg, bold=1, exitOnFailure=1) :
+	def fenrirPanic(self, msg: str, bold: int = 1, exitOnFailure: int = 1) -> None:
 		"""
 		Gère une panique FENRIR (erreur critique).
 		

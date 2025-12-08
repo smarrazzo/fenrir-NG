@@ -2,23 +2,24 @@
 
 import socket
 import select
+from typing import Optional, Tuple, List
 from scapy.all import Ether, IP, ARP
-from logger import get_logger
+from logger import get_logger, FenrirLogger
 from exceptions import FenrirInterfaceError, FenrirAutoconfError
 from binascii import hexlify, unhexlify
 
 
 class Autoconf :
 
-	def __init__(self):
-		self.hostmac = b""  # bytes pour cohérence
-		self.hostip = ""
-		self.conf = True
-		self.ifaceHost = "em1"
-		self.ifaceNetwork = "eth0"
-		self.logger = get_logger('FENRIR.Autoconf', verbosity=1)
-		self.sockHost = None
-		self.sockNetwork = None
+	def __init__(self) -> None:
+		self.hostmac: bytes = b""  # bytes pour cohérence
+		self.hostip: str = ""
+		self.conf: bool = True
+		self.ifaceHost: str = "em1"
+		self.ifaceNetwork: str = "eth0"
+		self.logger: FenrirLogger = get_logger('FENRIR.Autoconf', verbosity=1)
+		self.sockHost: Optional[socket.socket] = None
+		self.sockNetwork: Optional[socket.socket] = None
 		
 		try:
 			self.sockHost = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
@@ -47,9 +48,9 @@ class Autoconf :
 				'error': str(e)
 			}) from e
 		
-		self.inputs = [s for s in [self.sockHost, self.sockNetwork] if s is not None]
+		self.inputs: List[socket.socket] = [s for s in [self.sockHost, self.sockNetwork] if s is not None]
 
-	def startAutoconf(self):
+	def startAutoconf(self) -> Tuple[str, str]:
 		"""
 		Démarre la détection automatique de l'IP et MAC de l'hôte.
 		

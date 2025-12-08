@@ -7,7 +7,9 @@
 ##|# -          to both the legitimate and rogue host          - #|###
 ######################################################################
 
+from typing import Optional, List, Union
 from scapy.all import Ether, IP, ICMP
+from scapy.packet import Packet as ScapyPacket
 from FenrirTail import FenrirTail
 
 
@@ -16,21 +18,21 @@ from FenrirTail import FenrirTail
 ###################################################################
 class modICMP :
 
-	def __init__(self, ip_host, ip_rogue, mac_host, mac_rogue, debugLevel=1) :
-		self.FenrirTail = FenrirTail(debugLevel)
-		self.debugLevel = debugLevel
+	def __init__(self, ip_host: str, ip_rogue: str, mac_host: str, mac_rogue: str, debugLevel: int = 1) -> None:
+		self.FenrirTail: FenrirTail = FenrirTail(debugLevel)
+		self.debugLevel: int = debugLevel
 		self.FenrirTail.notify('Loading ICMP module...', 1)
-		self.ICMPthreads = []
-		self.ICMPthread_number = 0
-		self.host = ip_host
-		self.rogue = ip_rogue
-		self.mrogue = mac_rogue
-		self.mhost = mac_host
-		self.requestTypes = [8, 13, 15, 17]
+		self.ICMPthreads: List['ICMPthread'] = []
+		self.ICMPthread_number: int = 0
+		self.host: str = ip_host
+		self.rogue: str = ip_rogue
+		self.mrogue: str = mac_rogue
+		self.mhost: str = mac_host
+		self.requestTypes: List[int] = [8, 13, 15, 17]
 
 
 	## modICMP main routine ##
-	def Fenrir_Control_Message_Protocol(self, ICMPpkt) :
+	def Fenrir_Control_Message_Protocol(self, ICMPpkt: ScapyPacket) -> Union[ScapyPacket, bool]:
 		if ICMPpkt[ICMP].type in self.requestTypes :  # request
 			self.FenrirTail.notify('ICMP request received', 3)
 			if ICMPpkt[Ether].src == self.mrogue or ICMPpkt[Ether].src == self.mhost :
@@ -56,7 +58,7 @@ class modICMP :
 
 
 	## Creation of new ICMPthread, returns an ICMPthread ##
-	def createICMPthread(self, pkt) :
+	def createICMPthread(self, pkt: ScapyPacket) -> 'ICMPthread':
 		self.ICMPthread_number += 1
 		ICMPthread_instance = ICMPthread(pkt[Ether].src, pkt[Ether].dst, pkt[IP].src, pkt[IP].dst, "req_sent")
 		self.ICMPthreads.append(ICMPthread_instance)
@@ -65,7 +67,7 @@ class modICMP :
 
 
 	## Deletion of complete ICMPthread ##
-	def deleteICMPthread(self, ICMPthread) :
+	def deleteICMPthread(self, ICMPthread: 'ICMPthread') -> bool:
 		try :
 			self.ICMPthreads.remove(ICMPthread)
 			self.ICMPthread_number -= 1
@@ -76,7 +78,7 @@ class modICMP :
 
 
 	## Mangling functions, return mangled packets ##
-	def ICMPRequestMangling(self, pkt) :
+	def ICMPRequestMangling(self, pkt: ScapyPacket) -> ScapyPacket:
 		if pkt[Ether].src == self.mrogue :  # packet from rogue
 			return self.pktRewriter(pkt, self.host, 0, self.mhost, 0)
 		elif pkt[Ether].src == self.mhost :  # packet from host - no need for mangling
@@ -86,7 +88,7 @@ class modICMP :
 			self.FenrirTail.fenrirPanic('NOT YET IMPLEMENTED (ICMP request from network)')
 
 
-	def ICMPReplyMangling(self, pkt, ICMPthread) :
+	def ICMPReplyMangling(self, pkt: ScapyPacket, ICMPthread: 'ICMPthread') -> ScapyPacket:
 		if ICMPthread.src_mac == self.mrogue :  # packet for rogue
 			return self.pktRewriter(pkt, 0, self.rogue, 0, self.mrogue)
 		elif ICMPthread.src_mac == self.mhost :  # packet for host no need for mangling
@@ -97,7 +99,7 @@ class modICMP :
 
 
 	## Rewrites ICMP packets ##
-	def pktRewriter(self, pkt, src, dst, msrc, mdst) :
+	def pktRewriter(self, pkt: ScapyPacket, src: Union[str, int], dst: Union[str, int], msrc: Union[str, int], mdst: Union[str, int]) -> ScapyPacket:
 		self.FenrirTail.notify('ICMP packet is being rewritten :', 3)
 		if src != 0 :
 			self.FenrirTail.notify('\t' + pkt[IP].src + ' --> ' + src, 3)
@@ -125,19 +127,19 @@ class modICMP :
 ### --- Class representing an ARP exchange between 2 hosts --- ####
 ###################################################################
 class ICMPthread :
-	states = ['req_sent', 'rep_rcvd', 'zombie']
+	states: List[str] = ['req_sent', 'rep_rcvd', 'zombie']
 
 	#SOURCE is always from the host point of view (spoofed/rogue host)
-	def __init__(self, msrc, mdst, asrc, adst, state = "req_sent") :
-		self.src_mac = msrc
-		self.src_ip = asrc
-		self.dst_mac = mdst
-		self.dst_ip = adst
-		self.state = state
+	def __init__(self, msrc: str, mdst: str, asrc: str, adst: str, state: str = "req_sent") -> None:
+		self.src_mac: str = msrc
+		self.src_ip: str = asrc
+		self.dst_mac: str = mdst
+		self.dst_ip: str = adst
+		self.state: str = state
 
 
 	## Returns True if a packet is a reply to a previous request
-	def thisIsMyICMP(self, pkt) :
+	def thisIsMyICMP(self, pkt: ScapyPacket) -> bool:
 		if pkt[Ether].src == self.dst_mac and pkt[IP].src == self.dst_ip :
 			return True
 		else :
@@ -145,7 +147,7 @@ class ICMPthread :
 
 
 	## Debugging functions ##
-	def dump(self) :
+	def dump(self) -> None:
 		print('src_mac = \t' + self.src_mac)
 		print('src_ip = \t' + self.src_ip)
 		print('dst_mac = \t' + self.dst_mac)

@@ -1,16 +1,17 @@
 # coding=utf-8
 
+from typing import Optional
 from cmd2 import Cmd
 from binascii import hexlify, unhexlify
 from FENRIR2 import FENRIR
 import threading
 
 class Interface(Cmd):
-	FENRIR = FENRIR()
-	FenrirThread = None
-	stop_event = None
-	promptBase = "FENRIR"
-	prompt = "\n\033[1m\033[31m" + promptBase + " >\033[0m "
+	FENRIR: FENRIR = FENRIR()
+	FenrirThread: Optional[threading.Thread] = None
+	stop_event: Optional[threading.Event] = None
+	promptBase: str = "FENRIR"
+	prompt: str = "\n\033[1m\033[31m" + promptBase + " >\033[0m "
 	intro = """\n\033[1m
 	                                                  ,a8b
 	                                              ,,od8  8
@@ -38,11 +39,11 @@ class Interface(Cmd):
 	\033[0m"""
 
 
-	def __init__(self):
+	def __init__(self) -> None:
 		Cmd.__init__(self)
 		
 	### TOOLBOX ###
-	def hexToStr(self, hexstr):
+	def hexToStr(self, hexstr: bytes) -> str:
 		"""
 		Convertit une adresse MAC en bytes vers une string formatée.
 		
@@ -59,7 +60,7 @@ class Interface(Cmd):
 		string = hexlify(hexstr).decode('ascii')
 		return string[:2] + ":" + string[2:4] + ":" + string[4:6] + ":" + string[6:8] + ":" + string[8:10] + ":" + string[-2:]
 
-	def strToHex(self, string):
+	def strToHex(self, string: str) -> bytes:
 		"""
 		Convertit une adresse MAC en string vers bytes.
 		
@@ -73,7 +74,7 @@ class Interface(Cmd):
 		hexstr = ''.join(hexes).encode("ascii")
 		return unhexlify(hexstr)  # unhexlify retourne bytes en Python 3
 
-	def changeRunningState(self, state):
+	def changeRunningState(self, state: bool) -> None:
 		if state == True:
 			self.prompt = "\n\033[1m\033[32m" + self.promptBase + " >\033[0m "
 			self.FENRIR.isRunning = True

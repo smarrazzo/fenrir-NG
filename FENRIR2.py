@@ -2,12 +2,14 @@
 
 from sys import exit
 import os
+from typing import Optional, Union, Set, Any
 from pytun import TunTapDevice, IFF_TAP, IFF_NO_PI
-from scapy.all import Ether, IP, ARP, ICMP, TCP, UDP, EAPOL, BOOTP, LLMNRQuery, fragment
+from scapy.all import Ether, IP, ARP, ICMP, TCP, UDP, EAPOL, BOOTP, LLMNRQuery, fragment, Packet
+from scapy.packet import Packet as ScapyPacket
 from MANGLE import MANGLE
 from FenrirFangs import FenrirFangs
 from Autoconf import Autoconf
-from logger import get_logger
+from logger import get_logger, FenrirLogger
 from exceptions import (
     FenrirSocketError, FenrirNetworkError, FenrirTAPError,
     FenrirPacketError, FenrirError
@@ -16,32 +18,34 @@ import socket
 import select
 import time
 from binascii import hexlify, unhexlify
+import threading
 
 class FENRIR:
 
-	def __init__(self):
+	def __init__(self) -> None:
 		if os.geteuid() != 0:
 			exit("You need root privileges to play with sockets !")	
-		self.isRunning = False
-		self.tap = None
-		self.s = None
-		self.MANGLE = None
-		self.hostip = '10.0.0.5'
-		self.hostmac = b'\x5c\x26\x0a\x13\x77\x8a'  # bytes explicit
+		self.isRunning: bool = False
+		self.tap: Optional[TunTapDevice] = None
+		self.s: Optional[socket.socket] = None
+		self.MANGLE: Optional[MANGLE] = None
+		self.hostip: str = '10.0.0.5'
+		self.hostmac: bytes = b'\x5c\x26\x0a\x13\x77\x8a'  # bytes explicit
 		#self.hostmac = b'\x00\x1d\xe6\xd8\x6f\x02'
-		self.hostmacStr = '5c:26:0a:13:77:8a'
+		self.hostmacStr: str = '5c:26:0a:13:77:8a'
 		#self.hostmacStr = "00:1d:e6:d8:6f:02"
-		self.verbosity = 3
-		self.scksnd1 = None
-		self.scksnd2 = None
-		self.Autoconf = Autoconf()
-		self.FenrirFangs = FenrirFangs(self.verbosity) #FenrirFangs instance
-		self.pktsCount = 0
-		self.LhostIface = 'em1'
-		self.switchIface = 'eth0'
-		self.logger = get_logger('FENRIR.Core', self.verbosity)
+		self.verbosity: int = 3
+		self.scksnd1: Optional[socket.socket] = None
+		self.scksnd2: Optional[socket.socket] = None
+		self.Autoconf: Autoconf = Autoconf()
+		self.FenrirFangs: FenrirFangs = FenrirFangs(self.verbosity) #FenrirFangs instance
+		self.pktsCount: int = 0
+		self.LhostIface: str = 'em1'
+		self.switchIface: str = 'eth0'
+		self.hwaddrStr: str = ""
+		self.logger: FenrirLogger = get_logger('FENRIR.Core', self.verbosity)
 
-	def createTap(self):
+	def createTap(self) -> None:
 		"""Crée une interface TAP virtuelle pour FENRIR."""
 		try:
 			self.tap = TunTapDevice(flags=IFF_TAP|IFF_NO_PI, name='FENRIR')
@@ -65,11 +69,11 @@ class FENRIR:
 			self.logger.critical(error_msg, exc_info=True)
 			raise FenrirTAPError(error_msg, details={'error': str(e), 'error_type': type(e).__name__}) from e
 
-	def downTap(self):
+	def downTap(self) -> None:
 		if self.tap is not None:
 			self.tap.down()
 
-	def bindAllIface(self):
+	def bindAllIface(self) -> None:
 		"""Lie le socket à toutes les interfaces pour capturer les paquets."""
 		try:
 			self.s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
@@ -83,7 +87,7 @@ class FENRIR:
 			self.logger.critical(error_msg, exc_info=True)
 			raise FenrirSocketError(error_msg, details={'error': str(e), 'error_type': type(e).__name__}) from e
 
-	def setAttribute(self, attributeName, attributeValue):
+	def setAttribute(self, attributeName: str, attributeValue: Union[str, bytes, int]) -> bool:
 		if attributeName == "host_ip":
 			self.hostip = attributeValue
 		elif attributeName == "host_mac":
@@ -115,7 +119,7 @@ class FENRIR:
 		else:
 			return False
 
-	def chooseIface(self,pkt) :
+	def chooseIface(self, pkt: ScapyPacket) -> str:
 		if pkt[Ether].dst == self.hwaddrStr :
 			return 'FENRIR'
 		elif pkt[Ether].dst == self.hostmacStr or ((pkt[Ether].dst == 'ff:ff:ff:ff:ff:ff' or pkt[Ether].dst == '01:80:c2:00:00:03') and pkt[Ether].src != self.hostmacStr)  :
@@ -124,7 +128,7 @@ class FENRIR:
 		else :
 			return self.switchIface
 
-	def sendeth2(self, raw, interface):
+	def sendeth2(self, raw: Union[bytes, ScapyPacket], interface: str) -> None:
 		"""
 		Envoie un paquet brut sur l'interface spécifiée.
 		
@@ -178,10 +182,10 @@ class FENRIR:
 			self.logger.error(error_msg, exc_info=True, interface=interface)
 			# Ne pas lever d'exception pour maintenir le comportement original
 
-	def initAutoconf(self):
+	def initAutoconf(self) -> None:
 		self.hostip, self.hostmacStr = self.Autoconf.startAutoconf()
 
-	def initMANGLE(self, stop_event):
+	def initMANGLE(self, stop_event: threading.Event) -> None:
 		"""Initialise et démarre la boucle principale de traitement des paquets."""
 		try:
 			self.bindAllIface()

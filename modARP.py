@@ -7,7 +7,9 @@
 ##|# -          to both the legitimate and rogue host          - #|###
 ######################################################################
 
+from typing import Optional, List, Union
 from scapy.all import Ether, ARP, ls
+from scapy.packet import Packet as ScapyPacket
 from FenrirTail import FenrirTail
 
 
@@ -16,20 +18,20 @@ from FenrirTail import FenrirTail
 ###################################################################
 class modARP :
 
-	def __init__(self, ip_host, ip_rogue, mac_host, mac_rogue, debugLevel=1) :
-		self.FenrirTail = FenrirTail(debugLevel)
-		self.debugLevel = debugLevel
+	def __init__(self, ip_host: str, ip_rogue: str, mac_host: str, mac_rogue: str, debugLevel: int = 1) -> None:
+		self.FenrirTail: FenrirTail = FenrirTail(debugLevel)
+		self.debugLevel: int = debugLevel
 		self.FenrirTail.notify('Loading ARP module...', 1)
-		self.ARPthreads = []
-		self.ARPthread_number = 0
-		self.host = ip_host
-		self.rogue = ip_rogue
-		self.mrogue = mac_rogue
-		self.mhost = mac_host
+		self.ARPthreads: List['ARPthread'] = []
+		self.ARPthread_number: int = 0
+		self.host: str = ip_host
+		self.rogue: str = ip_rogue
+		self.mrogue: str = mac_rogue
+		self.mhost: str = mac_host
 
 
 	## modARP main routine ##
-	def Fenrir_Address_Resolution_Protocol(self, ARPpkt) :
+	def Fenrir_Address_Resolution_Protocol(self, ARPpkt: ScapyPacket) -> Union[ScapyPacket, bool]:
 		if ARPpkt[ARP].op == 2 :  # ARP-reply
 			self.FenrirTail.notify('ARP reply received', 3)
 			for ARPthread in self.ARPthreads :
@@ -59,7 +61,7 @@ class modARP :
 
 
 	## returns True if packet is strange and may need further processing, False otherwise ##
-	def checkForStrangeARP(self, pkt) :
+	def checkForStrangeARP(self, pkt: ScapyPacket) -> bool:
 		if pkt[Ether].dst == self.mrogue or pkt[ARP].pdst == self.rogue :
 			self.FenrirTail.notify('Strange ARP packet detected. Dropping it... You may want to check where this one came from : ', 1)
 			ls(pkt)
@@ -70,7 +72,7 @@ class modARP :
 
 
 	## Creates an ARPthread from an ARP-request packet ##
-	def createARPthread(self, pkt) : 
+	def createARPthread(self, pkt: ScapyPacket) -> 'ARPthread': 
 		self.ARPthread_number += 1
 		ARPthread_instance = ARPthread(self.debugLevel, pkt[Ether].src, pkt[Ether].dst, pkt[ARP].psrc, pkt[ARP].pdst, 'req_sent')
 		self.ARPthreads.append(ARPthread_instance)
@@ -79,7 +81,7 @@ class modARP :
 
 
 	## Deletion of complete ICMPthread ##
-	def deleteARPthread(self, ARPthread) :
+	def deleteARPthread(self, ARPthread: 'ARPthread') -> bool:
 		try :
 			if ARPthread.state == 'zombie' :
 				self.FenrirTail.fenrirPanic('Unexpected situation occured during deletion of ARPthread (ARPthread is a zombie)')
@@ -93,12 +95,12 @@ class modARP :
 
 
 	## ARP Mangling Routines ##
-	def ARPRequestMangling(self, pkt) :
+	def ARPRequestMangling(self, pkt: ScapyPacket) -> ScapyPacket:
 		if pkt[ARP].psrc == self.rogue :
 			return self.pktRewriter(pkt, self.host, 0, self.mhost, 0, self.mhost, 0)
 		else :  # the ARP reply is for legit host
 			return pkt
-	def ARPReplyMangling(self, pkt, ARPthread) :
+	def ARPReplyMangling(self, pkt: ScapyPacket, ARPthread: 'ARPthread') -> ScapyPacket:
 		if ARPthread.src_mac == self.mrogue :  # the ARP reply is for rogue
 			return self.pktRewriter(pkt, 0, self.rogue, 0, self.mrogue, 0, self.mrogue)
 		else :  # the ARP reply is for legit host
@@ -106,7 +108,7 @@ class modARP :
 
 
 	## Rewrites ARP packets ##
-	def pktRewriter(self, pkt, src, dst, msrc, mdst, hwsrc, hwdst) :
+	def pktRewriter(self, pkt: ScapyPacket, src: Union[str, int], dst: Union[str, int], msrc: Union[str, int], mdst: Union[str, int], hwsrc: Union[str, int], hwdst: Union[str, int]) -> ScapyPacket:
 		self.FenrirTail.notify('ARP packet is being rewritten :', 3)
 		if src != 0 :
 			self.FenrirTail.notify('\t' + pkt[ARP].psrc + ' --> ' + src, 3)
@@ -135,19 +137,19 @@ class modARP :
 ### --- Class representing an ARP exchange between 2 hosts --- ####
 ###################################################################
 class ARPthread :
-	states = ['req_sent', 'rep_rcvd', 'zombie']
+	states: List[str] = ['req_sent', 'rep_rcvd', 'zombie']
 
 	#SOURCE is always from the host point of view (spoofed/rogue host)
-	def __init__(self, debugLevel, msrc, mdst, asrc, adst, state = "req_sent") :
-		self.FenrirTail = FenrirTail(debugLevel)
-		self.src_mac = msrc
-		self.src_ip = asrc
-		self.dst_mac = mdst
-		self.dst_ip = adst
-		self.state = state
+	def __init__(self, debugLevel: int, msrc: str, mdst: str, asrc: str, adst: str, state: str = "req_sent") -> None:
+		self.FenrirTail: FenrirTail = FenrirTail(debugLevel)
+		self.src_mac: str = msrc
+		self.src_ip: str = asrc
+		self.dst_mac: str = mdst
+		self.dst_ip: str = adst
+		self.state: str = state
 
 
-	def changeState(self) :
+	def changeState(self) -> None:
 		if self.state == 'req_sent' :
 			self.state = 'rep_rcvd'
 		elif self.state == 'rep_rcvd' :
@@ -156,7 +158,7 @@ class ARPthread :
 			self.FenrirTail.fenrirPanic("STRANGE ARP STATE DETECTED : '" + self.state + "' - Look for the 'changeState' function in modARP.py")
 
 	## Returns True if a packet is a reply to a previous request
-	def thisIsMyARP(self, pkt) :
+	def thisIsMyARP(self, pkt: ScapyPacket) -> bool:
 		if pkt[ARP].psrc == self.dst_ip :
 			return True
 		else :
@@ -164,7 +166,7 @@ class ARPthread :
 
 
 	## UTILS FUNCTIONS ##
-	def logdump(self) :
+	def logdump(self) -> None:
 		print('mac src : ' + self.src_mac)
 		print('ip src : ' + self.src_ip)
 		print('mac dst : ' + self.dst_mac)
