@@ -89,6 +89,8 @@ class FENRIR:
 
 	def setAttribute(self, attributeName: str, attributeValue: Union[str, bytes, int]) -> bool:
 		if attributeName == "host_ip":
+			if not isinstance(attributeValue, str):
+				return False
 			self.hostip = attributeValue
 		elif attributeName == "host_mac":
 			# S'assurer que hostmac est en bytes
@@ -99,25 +101,33 @@ class FENRIR:
 				self.hostmac = attributeValue
 			else:
 				# Essayer de convertir
-				self.hostmac = bytes(attributeValue)
+				try:
+					self.hostmac = bytes(attributeValue)
+				except Exception:
+					return False
 			
 			# hexlify retourne bytes en Python 3, donc decode() est nécessaire
 			tempStr = hexlify(self.hostmac).decode('ascii')
 			self.hostmacStr = tempStr[:2] + ":" + tempStr[2:4] + ":" + tempStr[4:6] + ":" + tempStr[6:8] + ":" + tempStr[8:10] + ":" + tempStr[-2:]
 		elif attributeName == "verbosity":
-			if attributeValue >= 0 and attributeValue <= 3:
+			if isinstance(attributeValue, int) and 0 <= attributeValue <= 3:
 				self.verbosity = attributeValue
 				self.FenrirFangs.changeVerbosity(self.verbosity)
 			else:
 				return False
 		elif attributeName == "netIface":
+			if not attributeValue:
+				return False
 			self.switchIface = str(attributeValue)
 			self.Autoconf.sockNetwork = self.switchIface
 		elif attributeName == "hostIface":
+			if not attributeValue:
+				return False
 			self.LhostIface = str(attributeValue)
 			self.Autoconf.ifaceHost = self.LhostIface
 		else:
 			return False
+		return True
 
 	def chooseIface(self, pkt: ScapyPacket) -> str:
 		if pkt[Ether].dst == self.hwaddrStr :

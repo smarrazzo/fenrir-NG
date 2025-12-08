@@ -5,6 +5,8 @@ from cmd2 import Cmd
 from binascii import hexlify, unhexlify
 from FENRIR2 import FENRIR
 import threading
+import ipaddress
+import re
 
 class Interface(Cmd):
 	FENRIR: FENRIR = FENRIR()
@@ -73,6 +75,27 @@ class Interface(Cmd):
 		hexes = string.split(":")
 		hexstr = ''.join(hexes).encode("ascii")
 		return unhexlify(hexstr)  # unhexlify retourne bytes en Python 3
+
+	### VALIDATION HELPERS ###
+	def _validate_ip(self, value: str) -> bool:
+		try:
+			ipaddress.ip_address(value)
+			return True
+		except ValueError:
+			return False
+
+	def _validate_mac(self, value: str) -> bool:
+		# Format XX:XX:XX:XX:XX:XX
+		return bool(re.fullmatch(r"[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}", value))
+
+	def _validate_port(self, value: str) -> Optional[int]:
+		try:
+			port = int(value)
+			if 1 <= port <= 65535:
+				return port
+			return None
+		except ValueError:
+			return None
 
 	def changeRunningState(self, state: bool) -> None:
 		if state == True:
@@ -149,12 +172,37 @@ class Interface(Cmd):
 			print("*** Invalid number of arguments")
 			self.help_set()
 		else:
+			attrValue = args[1]
 			if args[0] == "debug":
 				Cmd.do_set(self, argString)
+				return
 			elif args[0] == "host_mac":
+				if not self._validate_mac(args[1]):
+					print("*** host_mac invalide. Format attendu : XX:XX:XX:XX:XX:XX")
+					return
 				attrValue = self.strToHex(args[1])
+			elif args[0] == "host_ip":
+				if not self._validate_ip(args[1]):
+					print("*** host_ip invalide")
+					return
+			elif args[0] == "verbosity":
+				try:
+					attrValue_int = int(args[1])
+				except ValueError:
+					print("*** verbosity doit être un entier entre 0 et 3")
+					return
+				if attrValue_int < 0 or attrValue_int > 3:
+					print("*** verbosity doit être entre 0 et 3")
+					return
+				attrValue = attrValue_int
+			elif args[0] in ("netIface", "hostIface"):
+				if not args[1]:
+					print("*** Interface vide")
+					return
 			else:
-				attrValue = args[1]
+				print("*** Attribut inconnu")
+				self.help_set()
+				return
 			if self.FENRIR.setAttribute(args[0], attrValue) == False:
 				print("*** Invalid argument")
 				self.help_set()
@@ -186,18 +234,23 @@ class Interface(Cmd):
 			print("*** Invalid number of arguments")
 			self.help_add_rule()
 		else:
-			try:
-				args[0] = int(args[0])
-			except:
-				print("*** First agument must be a number")
+			port = self._validate_port(args[0])
+			if port is None:
+				print("*** Le port doit être un entier entre 1 et 65535")
 				self.help_add_rule()
+				return
 			TYPES_ARRAY = ('unique', 'multi')
-			if args[0] <= 65535 and args[0] > 0 and args[1] in TYPES_ARRAY:
-				self.FENRIR.FenrirFangs.addRule(args[0], args[2], args[1])
-				print("New rule added : \n\tport = " + str(args[0]) + "\n\ttype = " + args[1] + "\n\tproto = " + args[2])
-			else:
-				print("*** Invalid arguments")
+			PROTO_ARRAY = ('IP', 'TCP', 'UDP', 'ICMP')
+			if args[1] not in TYPES_ARRAY:
+				print("*** type doit être 'unique' ou 'multi'")
 				self.help_add_rule()
+				return
+			if args[2].upper() not in PROTO_ARRAY:
+				print("*** proto doit être IP, TCP, UDP ou ICMP")
+				self.help_add_rule()
+				return
+			self.FENRIR.FenrirFangs.addRule(port, args[2].upper(), args[1])
+			print("New rule added : \n\tport = " + str(port) + "\n\ttype = " + args[1] + "\n\tproto = " + args[2].upper())
 
 	def help_add_reverse_rule(self):
 		print("USAGE : add_reverse_rule <port> <type = unique> <proto = IP>")
